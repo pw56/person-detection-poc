@@ -16,7 +16,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   // モデルの初期化
   async function initModel() {
     try {
-      session = await ort.InferenceSession.create('./yolov12n.onnx', {
+      session = await ort.InferenceSession.create('./yolo12n.onnx', {
         executionProviders: ['wasm']
       });
       console.log('Model loaded successfully');
