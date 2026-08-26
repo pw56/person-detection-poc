@@ -38,7 +38,7 @@ document.getElementById('imageInput').addEventListener('change', async (e) => {
 
       // 枠線の描画
       ctx.strokeStyle = '#00FF00';
-      ctx.lineWidth = Math.max(2, Math.round(canvas.width / 300));
+      ctx.lineWidth = 4;
       ctx.strokeRect(x, y, width, height);
 
       // 信頼度テキストの表示
