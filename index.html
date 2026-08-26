@@ -3,17 +3,24 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>YOLOv12 / RTMLib 人物検出</title>
+  <title>YOLOv12 / ONNX Runtime 人物検出</title>
   <link rel="stylesheet" href="style.css">
   <!-- ONNX Runtime Web CDN -->
   <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web/dist/ort.min.js"></script>
-  <!-- rtmlib CDN -->
-  <script src="https://cdn.jsdelivr.net/npm/rtmlib-ts/dist/rtmlib.min.js"></script>
 </head>
 <body>
   <div class="container">
     <h1>人物検出 (YOLOv12-nano)</h1>
-    <input type="file" id="imageInput" accept="image/*">
+    
+    <div class="controls">
+      <input type="file" id="imageInput" accept="image/*">
+      
+      <div class="slider-group">
+        <label for="thresholdInput">信頼度閾値: <span id="thresholdValue">0%</span></label>
+        <input type="range" id="thresholdInput" min="0" max="100" value="0">
+      </div>
+    </div>
+
     <div class="stage">
       <canvas id="outputCanvas"></canvas>
     </div>

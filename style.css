@@ -14,10 +14,24 @@ body {
   padding: 20px;
   border-radius: 8px;
   box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+  max-width: 90vw;
+}
+
+.controls {
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.slider-group {
+  display: flex;
+  align-items: center;
+  gap: 10px;
 }
 
 .stage {
-  margin-top: 15px;
   position: relative;
   display: inline-block;
 }
