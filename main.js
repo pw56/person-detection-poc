@@ -5,77 +5,75 @@ let currentOutputTensor = null;
 const MODEL_WIDTH = 640;
 const MODEL_HEIGHT = 640;
 
-const imageInput = document.getElementById('imageInput');
-const thresholdInput = document.getElementById('thresholdInput');
-const thresholdValue = document.getElementById('thresholdValue');
-const canvas = document.getElementById('outputCanvas');
-const ctx = canvas.getContext('2d');
+// DOMの読み込み完了後にすべての処理・初期化を実行
+document.addEventListener('DOMContentLoaded', async () => {
+  const imageInput = document.getElementById('imageInput');
+  const thresholdInput = document.getElementById('thresholdInput');
+  const thresholdValue = document.getElementById('thresholdValue');
+  const canvas = document.getElementById('outputCanvas');
+  const ctx = canvas.getContext('2d');
 
-// モデルの初期化
-async function initModel() {
-  try {
-    session = await ort.InferenceSession.create('./yolo12n.onnx', {
-      executionProviders: ['wasm']
-    });
-    console.log('Model loaded successfully');
-  } catch (e) {
-    console.error('Failed to load model:', e);
+  // モデルの初期化
+  async function initModel() {
+    try {
+      session = await ort.InferenceSession.create('./yolov12n.onnx', {
+        executionProviders: ['wasm']
+      });
+      console.log('Model loaded successfully');
+    } catch (e) {
+      console.error('Failed to load model:', e);
+    }
   }
-}
 
-// 画像が選択された時の処理
-imageInput.addEventListener('change', async (e) => {
-  const file = e.target.files[0];
-  if (!file || !session) return;
+  // スライダー変更時の処理（数値ラベルの更新と描画）
+  thresholdInput.addEventListener('input', (e) => {
+    const val = e.target.value;
+    thresholdValue.textContent = `${val}%`;
+    
+    if (currentImage && currentOutputTensor) {
+      redraw();
+    }
+  });
 
-  const img = new Image();
-  img.src = URL.createObjectURL(file);
-  await img.decode();
-  
-  // 保持
-  currentImage = img;
+  // 画像選択時の処理
+  imageInput.addEventListener('change', async (e) => {
+    const file = e.target.files[0];
+    if (!file || !session) return;
 
-  canvas.width = img.width;
-  canvas.height = img.height;
+    const img = new Image();
+    img.src = URL.createObjectURL(file);
+    await img.decode();
+    
+    currentImage = img;
+    canvas.width = img.width;
+    canvas.height = img.height;
 
-  // 1. 前処理
-  const inputTensor = await preprocess(img, MODEL_WIDTH, MODEL_HEIGHT);
+    // 前処理と推論
+    const inputTensor = await preprocess(img, MODEL_WIDTH, MODEL_HEIGHT);
+    const feeds = {};
+    feeds[session.inputNames[0]] = inputTensor;
+    
+    const results = await session.run(feeds);
+    currentOutputTensor = results[session.outputNames[0]];
 
-  // 2. 推論実行
-  const feeds = {};
-  feeds[session.inputNames[0]] = inputTensor;
-  const results = await session.run(feeds);
-
-  // 出力データの保持
-  currentOutputTensor = results[session.outputNames[0]];
-
-  // 3. 描画の実行
-  redraw();
-});
-
-// スライダー変更時の処理
-thresholdInput.addEventListener('input', (e) => {
-  const val = e.target.value;
-  thresholdValue.textContent = `${val}%`;
-  
-  // 画像と推論結果があれば再描画
-  if (currentImage && currentOutputTensor) {
     redraw();
+  });
+
+  // 再描画処理
+  function redraw() {
+    const threshold = parseFloat(thresholdInput.value) / 100;
+    
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.drawImage(currentImage, 0, 0);
+
+    processAndDrawBoxes(currentOutputTensor, currentImage.width, currentImage.height, ctx, threshold);
   }
+
+  // モデル読み込みの開始
+  await initModel();
 });
 
-// 描画処理関数
-function redraw() {
-  const threshold = parseFloat(thresholdInput.value) / 100;
-
-  // 元画像を再描画してキャンバスをクリア
-  ctx.drawImage(currentImage, 0, 0);
-
-  // 閾値を適用して枠を描画
-  processAndDrawBoxes(currentOutputTensor, currentImage.width, currentImage.height, ctx, threshold);
-}
-
-// 画像の前処理
+// 前処理
 async function preprocess(img, targetWidth, targetHeight) {
   const offscreenCanvas = document.createElement('canvas');
   offscreenCanvas.width = targetWidth;
@@ -97,23 +95,49 @@ async function preprocess(img, targetWidth, targetHeight) {
   return new ort.Tensor('float32', float32Data, [1, 3, targetHeight, targetWidth]);
 }
 
-// ボックス描画処理
+// 描画処理
 function processAndDrawBoxes(outputTensor, origWidth, origHeight, ctx, threshold) {
-  const [batch, channels, numBoxes] = outputTensor.dims;
+  const dims = outputTensor.dims;
   const data = outputTensor.data;
+
+  let numBoxes, numChannels;
+  let isTransposed = false;
+
+  if (dims.length === 3) {
+    if (dims[1] < dims[2]) {
+      numChannels = dims[1];
+      numBoxes = dims[2];
+      isTransposed = false;
+    } else {
+      numBoxes = dims[1];
+      numChannels = dims[2];
+      isTransposed = true;
+    }
+  } else {
+    return;
+  }
 
   const scaleX = origWidth / MODEL_WIDTH;
   const scaleY = origHeight / MODEL_HEIGHT;
 
   for (let i = 0; i < numBoxes; i++) {
-    const cx = data[0 * numBoxes + i];
-    const cy = data[1 * numBoxes + i];
-    const w  = data[2 * numBoxes + i];
-    const h  = data[3 * numBoxes + i];
+    let cx, cy, w, h, personScore;
 
-    const personScore = data[4 * numBoxes + i];
+    if (!isTransposed) {
+      cx = data[0 * numBoxes + i];
+      cy = data[1 * numBoxes + i];
+      w  = data[2 * numBoxes + i];
+      h  = data[3 * numBoxes + i];
+      personScore = data[4 * numBoxes + i];
+    } else {
+      const stride = numChannels;
+      cx = data[i * stride + 0];
+      cy = data[i * stride + 1];
+      w  = data[i * stride + 2];
+      h  = data[i * stride + 3];
+      personScore = data[i * stride + 4];
+    }
 
-    // 指定された閾値以上のものだけを描画
     if (personScore >= threshold) {
       const x = (cx - w / 2) * scaleX;
       const y = (cy - h / 2) * scaleY;
@@ -135,6 +159,3 @@ function processAndDrawBoxes(outputTensor, origWidth, origHeight, ctx, threshold
     }
   }
 }
-
-// 初期化実行
-initModel();
