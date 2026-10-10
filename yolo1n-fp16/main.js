@@ -16,8 +16,17 @@ document.addEventListener('DOMContentLoaded', async () => {
   // モデルの初期化
   async function initModel() {
     try {
+      // WASM環境でFP16を扱うためにSIMDを強制有効化（セッション作成前に実行が必要）
+      ort.env.wasm.simd = true;
+
       session = await ort.InferenceSession.create('./yolo12n-fp16.onnx', {
-        executionProviders: ['wasm']
+        executionProviders: ['wasm'],
+        // 実行プロバイダ（WASM）のオプションでSIMDを有効化
+        providerOptions: {
+          wasm: {
+            simd: true
+          }
+        }
       });
       console.log('Model loaded successfully');
     } catch (e) {
