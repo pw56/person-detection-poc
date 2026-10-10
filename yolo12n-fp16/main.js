@@ -82,57 +82,31 @@ document.addEventListener('DOMContentLoaded', async () => {
   await initModel();
 });
 
-// Float32の数値をUint16（Float16ビットパターン）に変換するヘルパー関数
+// DataViewを使用した正確なFloat16/Float32相互変換ユーティリティ
+const fp16Buffer = new ArrayBuffer(2);
+const fp16View = new DataView(fp16Buffer);
+
 function float32ToFloat16(val) {
-  const f32 = new Float32Array([val]);
-  const u32 = new Uint32Array(f32.buffer)[0];
-
-  const sign = (u32 >> 31) & 0x1;
-  let exp = (u32 >> 23) & 0xff;
-  let frac = u32 & 0x7fffff;
-
-  if (exp === 0xff) {
-    exp = 0x1f;
-    frac = frac ? 0x200 : 0;
-  } else if (exp === 0) {
-    exp = 0;
-    frac = 0;
-  } else {
-    exp = exp - 127 + 15;
-    if (exp >= 0x1f) {
-      exp = 0x1f;
-      frac = 0;
-    } else if (exp <= 0) {
-      exp = 0;
-      frac = 0;
-    } else {
-      frac = frac >> 13;
-    }
+  if (typeof fp16View.setFloat16 === 'function') {
+    fp16View.setFloat16(0, val, true);
+    return fp16View.getUint16(0, true);
   }
-
-  return (sign << 15) | (exp << 10) | frac;
+  // フォールバック（標準のFloat16Arrayが存在する場合）
+  if (typeof Float16Array !== 'undefined') {
+    return new Uint16Array(new Float16Array([val]).buffer)[0];
+  }
+  return 0;
 }
 
-// Uint16（Float16ビットパターン）をFloat32の数値に変換するヘルパー関数
 function float16ToFloat32(u16) {
-  const sign = (u16 >> 15) & 0x1;
-  const exp = (u16 >> 10) & 0x1f;
-  const frac = u16 & 0x3ff;
-
-  let f32Val = 0;
-  if (exp === 0x1f) {
-    f32Val = frac ? NaN : (sign ? -Infinity : Infinity);
-  } else if (exp === 0) {
-    if (frac !== 0) {
-      f32Val = (sign ? -1 : 1) * Math.pow(2, -14) * (frac / 1024);
-    } else {
-      f32Val = sign ? -0 : 0;
-    }
-  } else {
-    f32Val = (sign ? -1 : 1) * Math.pow(2, exp - 15) * (1 + frac / 1024);
+  if (typeof fp16View.getFloat16 === 'function') {
+    fp16View.setUint16(0, u16, true);
+    return fp16View.getFloat16(0, true);
   }
-
-  return f32Val;
+  if (typeof Float16Array !== 'undefined') {
+    return new Float16Array(new Uint16Array([u16]).buffer)[0];
+  }
+  return 0;
 }
 
 // 前処理
@@ -181,6 +155,9 @@ function processAndDrawBoxes(outputTensor, origWidth, origHeight, ctx, threshold
 
   const getValue = (index) => {
     if (rawData instanceof Float32Array) {
+      return rawData[index];
+    }
+    if (typeof Float16Array !== 'undefined' && rawData instanceof Float16Array) {
       return rawData[index];
     }
     return float16ToFloat32(rawData[index]);
