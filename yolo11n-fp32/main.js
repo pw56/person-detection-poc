@@ -117,8 +117,20 @@ function processAndDrawBoxes(outputTensor, origWidth, origHeight, ctx, threshold
     return;
   }
 
-  const scaleX = origWidth / MODEL_WIDTH;
-  const scaleY = origHeight / MODEL_HEIGHT;
+  // 座標が正規化（0.0〜1.0）されているか判定するための最大値確認
+  let maxCoordVal = 0;
+  const sampleCount = Math.min(100, numBoxes);
+  for (let i = 0; i < sampleCount; i++) {
+    const cx = !isTransposed ? data[0 * numBoxes + i] : data[i * numChannels + 0];
+    const cy = !isTransposed ? data[1 * numBoxes + i] : data[i * numChannels + 1];
+    if (cx > maxCoordVal) maxCoordVal = cx;
+    if (cy > maxCoordVal) maxCoordVal = cy;
+  }
+
+  // 最大値が1.5以下の場合は正規化（0〜1）出力とみなしスケールを変更
+  const isNormalized = maxCoordVal <= 1.5;
+  const scaleX = isNormalized ? origWidth : origWidth / MODEL_WIDTH;
+  const scaleY = isNormalized ? origHeight : origHeight / MODEL_HEIGHT;
 
   for (let i = 0; i < numBoxes; i++) {
     let cx, cy, w, h, personScore;
